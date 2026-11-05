@@ -99,6 +99,7 @@ body.phone.keypad-on main{padding-bottom:110px}
 <button id="clearBtn" type="button">Limpiar todo</button>
 <button id="exportBtn" class="primary" type="button">Exportar respuestas (PDF)</button>
 <button id="importPdfBtn" type="button">Importar respuestas desde PDF</button>
+<button id="soundToggle" type="button" aria-pressed="false">Activar sonido V/F</button>
 <input id="importPdfFile" type="file" accept="application/pdf,.pdf" hidden>
 
 </div>
@@ -152,9 +153,38 @@ function renderAnswer(n){const el=document.getElementById("q"+n);if(!el)return;e
 function scoreScale(s){return {v:s.V.filter(n=>answers[n]==="V").length,f:s.F.filter(n=>answers[n]==="F").length}}
 function update(){let count=answers.slice(1).filter(Boolean).length;document.getElementById("progress").textContent=`${count} / ${N} respondidas`;results.innerHTML="";scales.forEach(s=>{let sc=scoreScale(s),card=document.createElement("article");card.className="scale";card.innerHTML=`<h3>Escala ${s.name} <span style="font-weight:400;color:#657386">(${s.label})</span></h3><div class="counts"><span class="count v">V = ${sc.v}</span><span class="count f">F = ${sc.f}</span><span class="count">Total clave = ${sc.v+sc.f}</span></div>`;card.appendChild(keyline("V",s.V,"V"));card.appendChild(keyline("F",s.F,"F"));results.appendChild(card)})}
 function keyline(label,items,expected){let wrap=document.createElement("div");wrap.className="keyline";let title=document.createElement("div");title.className="keytitle";title.textContent=`Clave ${label} · ${items.length} reactivos`;wrap.appendChild(title);let nums=document.createElement("div");nums.className="keynums";items.forEach(n=>{let chip=document.createElement("span");chip.className="keynum";let r=answers[n];if(!r)chip.classList.add("noanswer");else if(r===expected)chip.classList.add("hit");else chip.classList.add("miss");chip.textContent=n+(r?` ${r}`:"");chip.title=`Reactivo ${n}: ${r||"sin respuesta"}; clave ${expected}`;nums.appendChild(chip)});wrap.appendChild(nums);return wrap}
+// Sonido opcional de confirmación V/F, generado localmente con Web Audio.
+let soundEnabled=false;
+let audioContext=null;
+function playAnswerSound(answer){
+  if(!soundEnabled)return;
+  try{
+    const AudioCtx=window.AudioContext||window.webkitAudioContext;
+    if(!AudioCtx)return;
+    if(!audioContext)audioContext=new AudioCtx();
+    if(audioContext.state==="suspended")audioContext.resume();
+    const oscillator=audioContext.createOscillator();
+    const gain=audioContext.createGain();
+    oscillator.type="sine";
+    oscillator.frequency.value=answer==="V"?880:440;
+    gain.gain.setValueAtTime(0.0001,audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.16,audioContext.currentTime+0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001,audioContext.currentTime+0.12);
+    oscillator.connect(gain);gain.connect(audioContext.destination);
+    oscillator.start();oscillator.stop(audioContext.currentTime+0.13);
+  }catch(err){console.warn("No se pudo reproducir el sonido",err)}
+}
+const soundToggle=document.getElementById("soundToggle");
+soundToggle.onclick=()=>{
+  soundEnabled=!soundEnabled;
+  soundToggle.classList.toggle("active",soundEnabled);
+  soundToggle.setAttribute("aria-pressed",String(soundEnabled));
+  soundToggle.textContent=soundEnabled?"Desactivar sonido V/F":"Activar sonido V/F";
+  if(soundEnabled)playAnswerSound("V");
+};
 sheet.addEventListener("click",e=>{
   let b=e.target.closest("button.answer");
-  if(b){currentQuestion=+b.dataset.q;setAnswer(currentQuestion,b.dataset.a)}
+  if(b){currentQuestion=+b.dataset.q;playAnswerSound(b.dataset.a);setAnswer(currentQuestion,b.dataset.a)}
 });
 function captureAndAdvance(a){
   let focused=document.activeElement?.closest?.(".item");
@@ -171,7 +201,7 @@ function captureAndAdvance(a){
 const keypad=document.getElementById("mobileKeypad");
 keypad.addEventListener("click",e=>{
   const b=e.target.closest("button[data-a]");
-  if(b)captureAndAdvance(b.dataset.a);
+  if(b){playAnswerSound(b.dataset.a);captureAndAdvance(b.dataset.a)}
 });
 const keypadToggle=document.getElementById("mobileKeypadToggle");
 keypadToggle.onclick=()=>{
@@ -190,6 +220,7 @@ document.addEventListener("keydown",e=>{
   currentQuestion=n;
   // Captura V/F y avanza automáticamente a la siguiente pregunta.
   answers[n]=e.key.toUpperCase();
+  playAnswerSound(e.key.toUpperCase());
   renderAnswer(n);update();
   e.preventDefault();
   const next=document.getElementById("q"+Math.min(N,n+1));
