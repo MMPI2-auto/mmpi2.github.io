@@ -50,6 +50,24 @@ body.phone .answers{grid-template-columns:repeat(5,minmax(0,1fr))}
 body.pc .answer{width:clamp(18px,1.8vw,26px);height:clamp(18px,1.8vw,26px)}
 body.phone .answer{width:34px;height:34px;font-size:13px}
 
+/* Teclado V/F opcional para teléfono */
+#mobileKeypadToggle{display:none}
+#mobileKeypad{display:none}
+body.phone #mobileKeypadToggle{display:inline-flex}
+body.phone #mobileKeypad.active{
+  display:flex;position:fixed;left:0;right:0;bottom:0;z-index:9999;
+  gap:12px;padding:12px max(12px,env(safe-area-inset-left))
+    calc(12px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-right));
+  background:rgba(20,36,58,.97);box-shadow:0 -4px 18px rgba(0,0,0,.22)
+}
+#mobileKeypad button{
+  flex:1;min-height:64px;font-size:28px;font-weight:800;border-radius:12px;
+  touch-action:manipulation
+}
+#mobileKeypad button[data-a="V"]{background:#d7f5e5;color:#137a4b;border-color:#137a4b}
+#mobileKeypad button[data-a="F"]{background:#ffe1df;color:#b42318;border-color:#b42318}
+body.phone.keypad-on main{padding-bottom:110px}
+
 @media print{
   body{background:white;color:#111}
   header, .toolbar, .notice, .footer-actions, .sheet-wrap{display:none!important}
@@ -75,6 +93,7 @@ body.phone .answer{width:34px;height:34px;font-size:13px}
 <span class="mode-label">Vista:</span>
 <button id="pcBtn" class="active" type="button">Computadora</button>
 <button id="phoneBtn" type="button">Teléfono</button>
+<button id="mobileKeypadToggle" type="button" aria-pressed="false">Activar teclado V/F</button>
 <span class="spacer"></span>
 <span class="progress" id="progress">0 / 380 respondidas</span>
 <button id="clearBtn" type="button">Limpiar todo</button>
@@ -83,7 +102,12 @@ body.phone .answer{width:34px;height:34px;font-size:13px}
 <input id="importPdfFile" type="file" accept="application/pdf,.pdf" hidden>
 
 </div>
-<div id="printReport"></div><div class="sheet-wrap">
+<div id="printReport"></div>
+<div id="mobileKeypad" aria-label="Teclado emergente V/F">
+  <button type="button" data-a="V" aria-label="Capturar verdadero">V</button>
+  <button type="button" data-a="F" aria-label="Capturar falso">F</button>
+</div>
+<div class="sheet-wrap">
 <section class="panel">
 <h2>Hoja de respuestas</h2>
 <p class="sub">Toca/clic en V o F. En computadora también puedes seleccionar una pregunta y escribir V o F. Clic de nuevo en la respuesta elegida la desmarca.</p>
@@ -118,6 +142,7 @@ const scales=[
 {name:"Is",label:"Introversión social",V:[31,56,70,100,104,110,127,135,158,161,167,185,215,243,251,265,275,284,289,296,302,308,326,337,338,347,348,351,352,357,364,367,368,369],F:[25,32,49,79,86,106,112,131,181,189,207,209,231,237,255,263,267,280,321,328,335,340,342,344,345,350,353,354,358,359,360,362,363,366,370]}
 ];
 const answers=Array(N+1).fill(null);
+let currentQuestion=1;
 const sheet=document.getElementById("answerSheet");
 const results=document.getElementById("scaleResults");
 function makeQuestion(n){const wrap=document.createElement("div");wrap.className="item unanswered";wrap.id="q"+n;wrap.innerHTML=`<div class="num">${n}</div><div class="picks"><button class="answer" data-q="${n}" data-a="V" aria-label="Pregunta ${n}, verdadero">V</button><button class="answer" data-q="${n}" data-a="F" aria-label="Pregunta ${n}, falso">F</button></div>`;return wrap}
@@ -127,13 +152,42 @@ function renderAnswer(n){const el=document.getElementById("q"+n);if(!el)return;e
 function scoreScale(s){return {v:s.V.filter(n=>answers[n]==="V").length,f:s.F.filter(n=>answers[n]==="F").length}}
 function update(){let count=answers.slice(1).filter(Boolean).length;document.getElementById("progress").textContent=`${count} / ${N} respondidas`;results.innerHTML="";scales.forEach(s=>{let sc=scoreScale(s),card=document.createElement("article");card.className="scale";card.innerHTML=`<h3>Escala ${s.name} <span style="font-weight:400;color:#657386">(${s.label})</span></h3><div class="counts"><span class="count v">V = ${sc.v}</span><span class="count f">F = ${sc.f}</span><span class="count">Total clave = ${sc.v+sc.f}</span></div>`;card.appendChild(keyline("V",s.V,"V"));card.appendChild(keyline("F",s.F,"F"));results.appendChild(card)})}
 function keyline(label,items,expected){let wrap=document.createElement("div");wrap.className="keyline";let title=document.createElement("div");title.className="keytitle";title.textContent=`Clave ${label} · ${items.length} reactivos`;wrap.appendChild(title);let nums=document.createElement("div");nums.className="keynums";items.forEach(n=>{let chip=document.createElement("span");chip.className="keynum";let r=answers[n];if(!r)chip.classList.add("noanswer");else if(r===expected)chip.classList.add("hit");else chip.classList.add("miss");chip.textContent=n+(r?` ${r}`:"");chip.title=`Reactivo ${n}: ${r||"sin respuesta"}; clave ${expected}`;nums.appendChild(chip)});wrap.appendChild(nums);return wrap}
-sheet.addEventListener("click",e=>{let b=e.target.closest("button.answer");if(b)setAnswer(+b.dataset.q,b.dataset.a)});
+sheet.addEventListener("click",e=>{
+  let b=e.target.closest("button.answer");
+  if(b){currentQuestion=+b.dataset.q;setAnswer(currentQuestion,b.dataset.a)}
+});
+function captureAndAdvance(a){
+  let focused=document.activeElement?.closest?.(".item");
+  let n=focused?+focused.id.slice(1):currentQuestion;
+  n=Math.max(1,Math.min(N,n||1));
+  answers[n]=a;currentQuestion=n;renderAnswer(n);update();
+  const next=document.getElementById("q"+Math.min(N,n+1));
+  if(next){
+    currentQuestion=Math.min(N,n+1);
+    next.scrollIntoView({behavior:"auto",block:"nearest"});
+    next.querySelector("button")?.focus({preventScroll:true});
+  }
+}
+const keypad=document.getElementById("mobileKeypad");
+keypad.addEventListener("click",e=>{
+  const b=e.target.closest("button[data-a]");
+  if(b)captureAndAdvance(b.dataset.a);
+});
+const keypadToggle=document.getElementById("mobileKeypadToggle");
+keypadToggle.onclick=()=>{
+  const enabled=keypad.classList.toggle("active");
+  document.body.classList.toggle("keypad-on",enabled);
+  keypadToggle.classList.toggle("active",enabled);
+  keypadToggle.setAttribute("aria-pressed",String(enabled));
+  keypadToggle.textContent=enabled?"Desactivar teclado V/F":"Activar teclado V/F";
+};
 document.addEventListener("keydown",e=>{
   if(e.key.toLowerCase()!=="v"&&e.key.toLowerCase()!=="f")return;
   if(["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName))return;
   let focused=document.activeElement?.closest?.(".item");
   if(!focused)return;
   const n=+focused.id.slice(1);
+  currentQuestion=n;
   // Captura V/F y avanza automáticamente a la siguiente pregunta.
   answers[n]=e.key.toUpperCase();
   renderAnswer(n);update();
@@ -159,8 +213,16 @@ function nextUnanswered(dir=1){
   alert("No hay preguntas sin contestar en esa dirección.");
 }
 document.getElementById("nextBtn").onclick=()=>nextUnanswered(1);document.getElementById("prevBtn").onclick=()=>nextUnanswered(-1);
-document.getElementById("pcBtn").onclick=()=>{document.body.className="pc";pcBtn.classList.add("active");phoneBtn.classList.remove("active")};
-document.getElementById("phoneBtn").onclick=()=>{document.body.className="phone";phoneBtn.classList.add("active");pcBtn.classList.remove("active")};
+document.getElementById("pcBtn").onclick=()=>{
+  document.body.classList.remove("phone","keypad-on");document.body.classList.add("pc");
+  pcBtn.classList.add("active");phoneBtn.classList.remove("active");
+  keypad.classList.remove("active");keypadToggle.classList.remove("active");
+  keypadToggle.setAttribute("aria-pressed","false");keypadToggle.textContent="Activar teclado V/F";
+};
+document.getElementById("phoneBtn").onclick=()=>{
+  document.body.classList.remove("pc");document.body.classList.add("phone");
+  phoneBtn.classList.add("active");pcBtn.classList.remove("active");
+};
 document.getElementById("clearBtn").onclick=()=>{if(confirm("¿Borrar todas las respuestas capturadas?")){answers.fill(null);for(let n=1;n<=N;n++)renderAnswer(n);update()}};
 document.getElementById("exportBtn").onclick=()=>{
   const report=document.getElementById("printReport");
