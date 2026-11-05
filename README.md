@@ -67,7 +67,7 @@ body.phone .answer{width:34px;height:34px;font-size:13px}
 <body class="pc">
 <header>
 <h1>MMPI-2 · Captura de respuestas y conteo de escalas</h1>
-<p>Registro de respuestas 1–380 y comparación automática con las claves del archivo de escalas proporcionado.</p>
+<p>Registro de respuestas 1–380 y comparación automática.</p>
 </header>
 <main>
 <div class="notice"><strong>Uso académico:</strong> esta página calcula conteos brutos V/F a partir de la clave suministrada. No interpreta perfiles ni genera diagnósticos. Verifica la clave y el resultado con el manual/procedimiento autorizado y supervisión docente. Las respuestas son datos sensibles: no compartas ni guardes datos identificables en equipos compartidos.</div>
